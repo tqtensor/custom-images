@@ -55,7 +55,7 @@ set -euxo pipefail
 #    --customization-script scripts/customize_conda.sh \
 #    --zone <zone> \
 #    --gcs-bucket gs://<bucket-directory-path> \
-#    --metadata 'conda-component=MINICONDA3,dataproc:conda.env.config.uri=gs://<file-path>/environment.yaml'
+#    --metadata 'conda-component=MINICONDA3,conda-env-config-uri=gs://<file-path>/environment.yaml'
 #
 #
 # The following example installs the specified conda and pip packages into the
@@ -67,7 +67,6 @@ set -euxo pipefail
 #    --zone <zone> \
 #    --gcs-bucket gs://<bucket-path> \
 #    --metadata 'conda-component=MINICONDA3,conda-packages=pytorch:1.4.0#visions:0.7.1,pip-packages=tokenizers:0.10.1#numpy:1.19.2'
-
 
 function customize_conda() {
   local conda_component
@@ -82,7 +81,7 @@ function customize_conda() {
 
   validate_conda_component "${conda_component}"
 
-  if [[ -n "${conda_env_config_uri}" && (( -n "${conda_packages}" || -n "${pip_packages}" )) ]]; then
+  if [[ -n "${conda_env_config_uri}" && ((-n "${conda_packages}" || -n "${pip_packages}")) ]]; then
     echo "conda-env-config-uri is mutually exclusive with conda-packages and pip-packages."
     exit 1
   fi
@@ -136,7 +135,7 @@ function create_and_activate_environment() {
   # Set property conda.env, which can be used during activate of the conda
   # component to activate the right environment.
   local -r conda_properties_path=/etc/google-dataproc/conda.properties
-  echo "conda.env=$conda_env_name" >> "${conda_properties_path}"
+  echo "conda.env=$conda_env_name" >>"${conda_properties_path}"
 }
 
 function customize_with_package_list() {
@@ -144,25 +143,25 @@ function customize_with_package_list() {
   local conda_packages=$2
   local pip_packages=$3
   if [[ -n "${conda_packages}" ]]; then
-      local -a packages
-      conda_packages=$(echo "${conda_packages}" | sed -r 's/:/==/g')
-      IFS='#' read -r -a packages <<< "${conda_packages}"
-      validate_package_formats "${packages[@]}"
+    local -a packages
+    conda_packages=$(echo "${conda_packages}" | sed -r 's/:/==/g')
+    IFS='#' read -r -a packages <<<"${conda_packages}"
+    validate_package_formats "${packages[@]}"
 
-      # Conda will upgrade dependencies only if required, and fail if conflict
-      # resolution with existing packages is not possible.
-      "${conda_bin_dir}/conda" install "${packages[@]}" --yes
-    fi
-    if [[ -n "${pip_packages}" ]]; then
-      local -a packages
-      pip_packages=$(echo "${pip_packages}" | sed -r 's/:/==/g')
-      IFS='#' read -r -a packages <<< "${pip_packages}"
-      validate_package_formats "${packages[@]}"
+    # Conda will upgrade dependencies only if required, and fail if conflict
+    # resolution with existing packages is not possible.
+    "${conda_bin_dir}/conda" install "${packages[@]}" --yes
+  fi
+  if [[ -n "${pip_packages}" ]]; then
+    local -a packages
+    pip_packages=$(echo "${pip_packages}" | sed -r 's/:/==/g')
+    IFS='#' read -r -a packages <<<"${pip_packages}"
+    validate_package_formats "${packages[@]}"
 
-      # Pip will upgrade dependencies only if required. Pip does not check for
-      # conflicts and may result in inconsistent environment.
-      "${conda_bin_dir}/pip" install -U --upgrade-strategy only-if-needed "${packages[@]}"
-    fi
+    # Pip will upgrade dependencies only if required. Pip does not check for
+    # conflicts and may result in inconsistent environment.
+    "${conda_bin_dir}/pip" install -U --upgrade-strategy only-if-needed "${packages[@]}"
+  fi
 }
 
 function validate_package_formats() {
