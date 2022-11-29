@@ -55,7 +55,7 @@ set -euxo pipefail
 #    --customization-script scripts/customize_conda.sh \
 #    --zone <zone> \
 #    --gcs-bucket gs://<bucket-directory-path> \
-#    --metadata 'conda-component=MINICONDA3,conda-env-config-uri=gs://<file-path>/environment.yaml'
+#    --metadata 'conda-component=MINICONDA3,conda-env-config-uri=gs://<file-path>/environment.yaml,plato-sdk-uri=gs://<file-path>/plato-sdk.tar.gz'
 #
 #
 # The following example installs the specified conda and pip packages into the
@@ -76,6 +76,7 @@ function customize_conda() {
   local conda_bin_dir
   conda_component=$(/usr/share/google/get_metadata_value attributes/conda-component || true)
   conda_env_config_uri=$(/usr/share/google/get_metadata_value attributes/conda-env-config-uri || true)
+  plato_sdk_uri=$(/usr/share/google/get_metadata_value attributes/plato-sdk-uri || true)
   conda_packages=$(/usr/share/google/get_metadata_value attributes/conda-packages || true)
   pip_packages=$(/usr/share/google/get_metadata_value attributes/pip-packages || true)
 
@@ -123,6 +124,7 @@ function customize_with_config_file() {
     conda_env_name="custom"
   fi
   create_and_activate_environment "${conda_bin_dir}" "${conda_env_name}" "${temp_config_file}"
+  install_plato_kernel "${conda_env_name}"
 }
 
 function create_and_activate_environment() {
@@ -173,6 +175,18 @@ function validate_package_formats() {
       exit 1
     fi
   done
+}
+
+function install_plato_kernel() {
+  local -r conda_env_name=$1
+  # Install ipykernel.
+  "${conda_bin_dir}/conda" install --name="${conda_env_name}" ipykernel -y
+  "/opt/conda/miniconda3/envs/${conda_env_name}/bin/python" -m ipykernel install --user --name="${conda_env_name}"
+
+  # Install plato-sdk.
+  temp_plato_sdk=$(mktemp /tmp/plato-sdk-XXX.tar.gz)
+  gsutil cp "${plato_sdk_uri}" "${temp_plato_sdk}"
+  "/opt/conda/miniconda3/envs/${conda_env_name}/bin/python" -m pip install "${temp_plato_sdk}" --no-deps
 }
 
 customize_conda
